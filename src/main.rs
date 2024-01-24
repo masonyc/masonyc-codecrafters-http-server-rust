@@ -1,3 +1,5 @@
+use core::fmt;
+
 use anyhow::{Context, Ok};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -24,14 +26,98 @@ async fn process(stream: &mut TcpStream) -> anyhow::Result<()> {
         .read(&mut buf)
         .await
         .context("CTX: handle connection read buffer")?;
-    let data = String::from_utf8_lossy(&buf[..]);
-    let mut parts = data.split_whitespace();
-    let _ = parts.next();
-    let path = parts.next();
-    let response = match path {
-        Some("/") => "HTTP/1.1 200 OK\r\n\r\n",
-        _ => "HTTP/1.1 404 Not Found\r\n\r\n",
+
+    let request = HttpRequest::from_byte_array(&buf);
+
+    let response = if request.path == "/" {
+        HttpResponse::new("".to_string(), "HTTP/1.1".to_string(), 200)
+    } else if request.path.starts_with("/echo/") {
+        let echo_content = request
+            .path
+            .split_once("/echo/")
+            .expect("Echo should contain content")
+            .1;
+        HttpResponse::new(echo_content.to_string(), "HTTP/1.1".to_string(), 200)
+    } else {
+        HttpResponse::new("".to_string(), "HTTP/1.1".to_string(), 404)
     };
-    stream.write_all(response.as_bytes()).await?;
+    stream.write_all(response.to_string().as_bytes()).await?;
     Ok(())
+}
+
+struct HttpResponse {
+    body: String,
+    protocol: String,
+    status: String,
+}
+
+impl HttpResponse {
+    fn new(body: String, protocol: String, status: u16) -> Self {
+        let status = if status == 200 {
+            "200 OK"
+        } else if status == 404 {
+            "404 Not Found"
+        } else {
+            panic!("HTTP status code not supported")
+        }
+        .to_string();
+
+        Self {
+            body,
+            protocol,
+            status,
+        }
+    }
+}
+
+impl fmt::Display for HttpResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut response = format!(
+            "{} {}\r\nContent-ntype: text/plain",
+            self.protocol, self.status
+        );
+
+        if !self.body.is_empty() {
+            response = format!(
+                "{}\r\nContent-Length: {}\r\n\r\n{}",
+                response,
+                self.body.len(),
+                self.body
+            );
+        }
+
+        write!(f, "{}", response)
+    }
+}
+
+struct HttpRequest {
+    verb: String,
+    path: String,
+    protocol: String,
+}
+
+impl HttpRequest {
+    fn from_byte_array(buf: &[u8; 1024]) -> Self {
+        let data = String::from_utf8_lossy(&buf[..]);
+        let mut parts = data.split_whitespace();
+
+        let verb = parts
+            .next()
+            .expect("Request should contains verb")
+            .to_string();
+        let path = parts
+            .next()
+            .expect("Request should contains path")
+            .to_string();
+        let protocol = parts
+            .next()
+            .expect("Request should contains protocol")
+            .to_string();
+
+        Self {
+            verb,
+            path,
+            protocol,
+        }
+    }
 }
