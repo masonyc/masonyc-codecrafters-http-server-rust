@@ -1,7 +1,10 @@
 // Uncomment this block to pass the first stage
 // use std::net::TcpListener;
 
-use tokio::net::{TcpListener, TcpStream};
+use tokio::{
+    io::AsyncWriteExt,
+    net::{TcpListener, TcpStream},
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -20,6 +23,6 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
-async fn process(_stream: TcpStream) {
-    println!("accepted new connection");
+async fn process(mut stream: TcpStream) {
+    let _ = stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await;
 }
