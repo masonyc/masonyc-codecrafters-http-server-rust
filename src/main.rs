@@ -29,17 +29,17 @@ async fn process(stream: &mut TcpStream) -> anyhow::Result<()> {
 
     let request = HttpRequest::from_byte_array(&buf);
 
-    let response = if request.path == "/" {
-        HttpResponse::new("".to_string(), "HTTP/1.1".to_string(), 200)
-    } else if request.path.starts_with("/echo/") {
+    let response = if request.verb == "GET" && request.path == "/" {
+        HttpResponse::new("".to_string(), request.protocol, 200)
+    } else if request.verb == "GET" && request.path.starts_with("/echo/") {
         let echo_content = request
             .path
             .split_once("/echo/")
             .expect("Echo should contain content")
             .1;
-        HttpResponse::new(echo_content.to_string(), "HTTP/1.1".to_string(), 200)
+        HttpResponse::new(echo_content.to_string(), request.protocol, 200)
     } else {
-        HttpResponse::new("".to_string(), "HTTP/1.1".to_string(), 404)
+        HttpResponse::new("".to_string(), request.protocol, 404)
     };
     stream.write_all(response.to_string().as_bytes()).await?;
     Ok(())
@@ -72,21 +72,18 @@ impl HttpResponse {
 
 impl fmt::Display for HttpResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut response = format!(
-            "{} {}\r\nContent-ntype: text/plain",
-            self.protocol, self.status
-        );
+        let mut response = format!("{} {}", self.protocol, self.status);
 
         if !self.body.is_empty() {
             response = format!(
-                "{}\r\nContent-Length: {}\r\n\r\n{}",
+                "{}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
                 response,
                 self.body.len(),
                 self.body
             );
         }
 
-        write!(f, "{}", response)
+        write!(f, "{}\r\n\r\n", response)
     }
 }
 
