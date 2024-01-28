@@ -1,5 +1,5 @@
 use core::fmt;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::format};
 
 use anyhow::{Context, Ok};
 use tokio::{
@@ -119,25 +119,17 @@ impl HttpRequest {
             .expect("Request should contains protocol")
             .to_string();
 
-        let unparsed_headers = parts.collect::<Vec<_>>();
-        if unparsed_headers.len() >= 2 {
-            let headers = unparsed_headers
-                .chunks(2)
-                .map(|x| (x[0].to_string(), x[1].to_string()))
-                .collect::<HashMap<_, _>>();
-            Self {
-                verb,
-                path,
-                protocol,
-                headers,
-            }
-        } else {
-            Self {
-                verb,
-                path,
-                protocol,
-                headers: HashMap::new(),
-            }
+        let headers = parts
+            .collect::<Vec<_>>()
+            .chunks(2)
+            .filter(|x| x.len() == 2)
+            .map(|x| (x[0].to_string(), x[1].to_string()))
+            .collect::<HashMap<_, _>>();
+        Self {
+            verb,
+            path,
+            protocol,
+            headers,
         }
     }
 }
