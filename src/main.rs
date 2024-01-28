@@ -2,7 +2,6 @@ use core::fmt;
 use std::collections::HashMap;
 
 use anyhow::{Context, Ok};
-use itertools::Itertools;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -41,7 +40,11 @@ async fn process(stream: &mut TcpStream) -> anyhow::Result<()> {
             .1;
         HttpResponse::new(echo_content.to_string(), request.protocol, 200)
     } else if request.verb == "GET" && request.path == "user-agent" {
-        HttpResponse::new(request.headers.get("User-Agent").unwrap().to_string(), request.protocol, 200)
+        HttpResponse::new(
+            request.headers.get("User-Agent").unwrap().to_string(),
+            request.protocol,
+            200,
+        )
     } else {
         HttpResponse::new("".to_string(), request.protocol, 404)
     };
@@ -116,16 +119,25 @@ impl HttpRequest {
             .expect("Request should contains protocol")
             .to_string();
 
-        let headers = parts
-            .collect::<Vec<_>>()
-            .chunks(2)
-            .map(|x| (x[0].to_string(), x[1].to_string()))
-            .collect::<HashMap<_, _>>();
-        Self {
-            verb,
-            path,
-            protocol,
-            headers,
+        let unparsed_headers = parts.collect::<Vec<_>>();
+        if unparsed_headers.len() >= 2 {
+            let headers = unparsed_headers
+                .chunks(2)
+                .map(|x| (x[0].to_string(), x[1].to_string()))
+                .collect::<HashMap<_, _>>();
+            Self {
+                verb,
+                path,
+                protocol,
+                headers,
+            }
+        } else {
+            Self {
+                verb,
+                path,
+                protocol,
+                headers: HashMap::new(),
+            }
         }
     }
 }
