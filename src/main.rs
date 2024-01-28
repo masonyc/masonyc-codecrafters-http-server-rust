@@ -1,6 +1,8 @@
 use core::fmt;
+use std::collections::HashMap;
 
 use anyhow::{Context, Ok};
+use itertools::Itertools;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -38,6 +40,8 @@ async fn process(stream: &mut TcpStream) -> anyhow::Result<()> {
             .expect("Echo should contain content")
             .1;
         HttpResponse::new(echo_content.to_string(), request.protocol, 200)
+    } else if request.verb == "GET" && request.path == "user-agent" {
+        HttpResponse::new(request.headers.get("User-Agent").unwrap().to_string(), request.protocol, 200)
     } else {
         HttpResponse::new("".to_string(), request.protocol, 404)
     };
@@ -91,6 +95,7 @@ struct HttpRequest {
     verb: String,
     path: String,
     protocol: String,
+    headers: HashMap<String, String>,
 }
 
 impl HttpRequest {
@@ -111,10 +116,16 @@ impl HttpRequest {
             .expect("Request should contains protocol")
             .to_string();
 
+        let headers = parts
+            .collect::<Vec<_>>()
+            .chunks(2)
+            .map(|x| (x[0].to_string(), x[1].to_string()))
+            .collect::<HashMap<_, _>>();
         Self {
             verb,
             path,
             protocol,
+            headers,
         }
     }
 }
