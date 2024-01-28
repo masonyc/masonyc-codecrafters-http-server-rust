@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{collections::HashMap, fmt::format};
+use std::collections::HashMap;
 
 use anyhow::{Context, Ok};
 use tokio::{
@@ -39,7 +39,11 @@ async fn process(stream: &mut TcpStream) -> anyhow::Result<()> {
             .expect("Echo should contain content")
             .1;
         HttpResponse::new(echo_content.to_string(), request.protocol, 200)
-    } else if request.verb == "GET" && request.path == "user-agent" {
+    } else if request.verb == "GET" && request.path == "/user-agent" {
+        dbg!(
+            "{:#?}",
+            request.headers.get("User-Agent").unwrap().to_string()
+        );
         HttpResponse::new(
             request.headers.get("User-Agent").unwrap().to_string(),
             request.protocol,
@@ -123,8 +127,15 @@ impl HttpRequest {
             .collect::<Vec<_>>()
             .chunks(2)
             .filter(|x| x.len() == 2)
-            .map(|x| (x[0].to_string(), x[1].to_string()))
+            .map(|x| {
+                (
+                    x[0].split_once(':').unwrap().0.to_string(),
+                    x[1].to_string(),
+                )
+            })
             .collect::<HashMap<_, _>>();
+
+        dbg!("{:#?}", headers.clone());
         Self {
             verb,
             path,
