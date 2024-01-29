@@ -1,9 +1,9 @@
-use anyhow::{Context, Ok};
+use anyhow::Ok;
 use clap::Parser;
 use core::fmt;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
 };
 
@@ -32,13 +32,14 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn process(stream: &mut TcpStream, arg: Arc<Args>) -> anyhow::Result<()> {
-    let mut buf = [0u8; 1024];
-    stream
-        .read(&mut buf)
-        .await
-        .context("CTX: handle connection read buffer")?;
+    let mut stream = BufReader::new(stream);
+    let _code = stream.read_u8().await?;
+    let len = stream.read_i32().await?;
 
-    let request = HttpRequest::from_byte_array(&buf);
+    let mut buf = vec![0; len as usize];
+    stream.read_exact(&mut buf).await?;
+
+    let request = HttpRequest::from_byte_array(buf);
 
     let response = if request.verb == "GET" && request.path == "/" {
         HttpResponse::new("".to_string(), request.protocol, 200)
@@ -158,7 +159,7 @@ struct HttpRequest {
 }
 
 impl HttpRequest {
-    fn from_byte_array(buf: &[u8; 1024]) -> Self {
+    fn from_byte_array(buf: Vec<u8>) -> Self {
         let data = String::from_utf8_lossy(&buf[..]);
 
         let (parts, body) = data.split_once("\r\n\r\n").unwrap_or_default();
