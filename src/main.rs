@@ -57,7 +57,7 @@ async fn process(stream: &mut TcpStream, arg: Arc<Args>) -> anyhow::Result<()> {
             200,
         );
         response.prepare_plain_text_headers()
-    } else if request.path.starts_with("/files/") {
+    } else if request.verb == "GET" && request.path.starts_with("/files/") {
         let filename = request.path.split_once("/files").unwrap().1;
         dbg!("file name {}", filename);
         let path_str = format!("{}/{}", arg.directory.to_owned().unwrap(), filename);
@@ -70,6 +70,15 @@ async fn process(stream: &mut TcpStream, arg: Arc<Args>) -> anyhow::Result<()> {
         } else {
             HttpResponse::new("".to_string(), request.protocol, 404)
         }
+    } else if request.verb == "POST" && request.path.starts_with("/files/") {
+        let filename = request.path.split_once("/files").unwrap().1;
+        dbg!("file name {}", filename);
+        let path_str = format!("{}/{}", arg.directory.to_owned().unwrap(), filename);
+        let path = Path::new(&path_str);
+
+        let _ = fs::write(path, request.body);
+
+        HttpResponse::new("".to_string(), request.protocol, 201)
     } else {
         HttpResponse::new("".to_string(), request.protocol, 404)
     };
@@ -143,12 +152,15 @@ struct HttpRequest {
     path: String,
     protocol: String,
     headers: HashMap<String, String>,
+    body: String,
 }
 
 impl HttpRequest {
     fn from_byte_array(buf: &[u8; 1024]) -> Self {
         let data = String::from_utf8_lossy(&buf[..]);
-        let mut parts = data.split_whitespace();
+
+        let (parts, body) = data.split_once("\r\n\r\n").unwrap_or_default();
+        let mut parts = parts.split_whitespace();
 
         let verb = parts
             .next()
@@ -176,11 +188,13 @@ impl HttpRequest {
             .collect::<HashMap<_, _>>();
 
         dbg!("{:#?}", headers.clone());
+        let body = body.to_string();
         Self {
             verb,
             path,
             protocol,
             headers,
+            body,
         }
     }
 }
