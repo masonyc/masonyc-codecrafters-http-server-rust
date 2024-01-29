@@ -1,7 +1,7 @@
 use anyhow::{Context, Ok};
 use clap::Parser;
 use core::fmt;
-use std::{collections::HashMap, fs::{self, File}, io::Read, path::Path, sync::Arc};
+use std::{collections::HashMap, fs, path::Path, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -11,7 +11,7 @@ use tokio::{
 #[command(author, version, about, long_about = None)]
 struct Args {
     #[arg(long)]
-    directory: String,
+    directory: Option<String>,
 }
 
 #[tokio::main]
@@ -40,7 +40,7 @@ async fn process(stream: &mut TcpStream, arg: Arc<Args>) -> anyhow::Result<()> {
 
     let request = HttpRequest::from_byte_array(&buf);
 
-    let mut headers = HashMap::new();
+    let headers = HashMap::new();
 
     let response = if request.verb == "GET" && request.path == "/" {
         HttpResponse::new("".to_string(), request.protocol, 200, headers)
@@ -66,17 +66,12 @@ async fn process(stream: &mut TcpStream, arg: Arc<Args>) -> anyhow::Result<()> {
         response.prepare_plain_text_headers()
     } else if request.path.starts_with("/files/") {
         let filename = request.path.split_once("/files").unwrap().1;
-        let path_str = format!("{}/{}", arg.directory, filename);
+        let path_str = format!("{}/{}", arg.directory.to_owned().unwrap(), filename);
         let path = Path::new(&path_str);
 
         if path.exists() {
             let body = fs::read_to_string(path).expect("Read file always sucuess");
-            let response= HttpResponse::new(
-                body,
-                request.protocol,
-                200,
-                headers
-            );
+            let response = HttpResponse::new(body, request.protocol, 200, headers);
             response.prepare_octet_stream_headers()
         } else {
             HttpResponse::new("".to_string(), request.protocol, 404, headers)
@@ -96,12 +91,7 @@ struct HttpResponse {
 }
 
 impl HttpResponse {
-    fn new(
-        body: String,
-        protocol: String,
-        status: u16,
-        headers: HashMap<String, String>,
-    ) -> Self {
+    fn new(body: String, protocol: String, status: u16, headers: HashMap<String, String>) -> Self {
         let status = if status == 200 {
             "200 OK"
         } else if status == 404 {
@@ -128,8 +118,10 @@ impl HttpResponse {
     }
 
     fn prepare_octet_stream_headers(mut self) -> HttpResponse {
-        self.headers
-            .insert("Content-Type".to_string(), "application/octet-stream".to_string());
+        self.headers.insert(
+            "Content-Type".to_string(),
+            "application/octet-stream".to_string(),
+        );
         self.headers
             .insert("Content-Length".to_string(), self.body.len().to_string());
         self
