@@ -130,6 +130,10 @@ impl fmt::Display for HttpResponse {
             response = format!("{}\r\n{}: {}", response, header.0, header.1);
         });
 
+        if !self.body.is_empty() {
+            response = format!("{}\r\n\r\n{}", response, self.body);
+        }
+
         write!(f, "{}\r\n\r\n", response)
     }
 }
