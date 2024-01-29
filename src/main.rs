@@ -40,44 +40,38 @@ async fn process(stream: &mut TcpStream, arg: Arc<Args>) -> anyhow::Result<()> {
 
     let request = HttpRequest::from_byte_array(&buf);
 
-    let headers = HashMap::new();
-
     let response = if request.verb == "GET" && request.path == "/" {
-        HttpResponse::new("".to_string(), request.protocol, 200, headers)
+        HttpResponse::new("".to_string(), request.protocol, 200)
     } else if request.verb == "GET" && request.path.starts_with("/echo/") {
         let echo_content = request
             .path
             .split_once("/echo/")
             .expect("Echo should contain content")
             .1;
-        let response = HttpResponse::new(echo_content.to_string(), request.protocol, 200, headers);
+        let response = HttpResponse::new(echo_content.to_string(), request.protocol, 200);
         response.prepare_plain_text_headers()
     } else if request.verb == "GET" && request.path == "/user-agent" {
-        dbg!(
-            "{:#?}",
-            request.headers.get("User-Agent").unwrap().to_string()
-        );
         let response = HttpResponse::new(
             request.headers.get("User-Agent").unwrap().to_string(),
             request.protocol,
             200,
-            headers,
         );
         response.prepare_plain_text_headers()
     } else if request.path.starts_with("/files/") {
         let filename = request.path.split_once("/files").unwrap().1;
+        dbg!("file name {}", filename);
         let path_str = format!("{}/{}", arg.directory.to_owned().unwrap(), filename);
         let path = Path::new(&path_str);
 
         if path.exists() {
             let body = fs::read_to_string(path).expect("Read file always sucuess");
-            let response = HttpResponse::new(body, request.protocol, 200, headers);
+            let response = HttpResponse::new(body, request.protocol, 200);
             response.prepare_octet_stream_headers()
         } else {
-            HttpResponse::new("".to_string(), request.protocol, 404, headers)
+            HttpResponse::new("".to_string(), request.protocol, 404)
         }
     } else {
-        HttpResponse::new("".to_string(), request.protocol, 404, headers)
+        HttpResponse::new("".to_string(), request.protocol, 404)
     };
     stream.write_all(response.to_string().as_bytes()).await?;
     Ok(())
@@ -91,7 +85,7 @@ struct HttpResponse {
 }
 
 impl HttpResponse {
-    fn new(body: String, protocol: String, status: u16, headers: HashMap<String, String>) -> Self {
+    fn new(body: String, protocol: String, status: u16) -> Self {
         let status = if status == 200 {
             "200 OK"
         } else if status == 404 {
@@ -105,7 +99,7 @@ impl HttpResponse {
             body,
             protocol,
             status,
-            headers,
+            headers: HashMap::new(),
         }
     }
 
@@ -132,14 +126,9 @@ impl fmt::Display for HttpResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut response = format!("{} {}", self.protocol, self.status);
 
-        if !self.body.is_empty() {
-            response = format!(
-                "{}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-                response,
-                self.body.len(),
-                self.body
-            );
-        }
+        self.headers.clone().into_iter().for_each(|header| {
+            response = format!("{}\r\n{}: {}", response, header.0, header.1);
+        });
 
         write!(f, "{}\r\n\r\n", response)
     }
