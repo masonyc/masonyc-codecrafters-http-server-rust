@@ -191,6 +191,7 @@ impl HttpRequest {
 
         dbg!("{:#?}", headers.clone());
         let body = body.to_string();
+        dbg!("body {:#?}", body.clone());
         Self {
             verb,
             path,
