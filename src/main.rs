@@ -33,12 +33,12 @@ async fn main() -> anyhow::Result<()> {
 
 async fn process(stream: &mut TcpStream, arg: Arc<Args>) -> anyhow::Result<()> {
     let mut buf = [0u8; 1024];
-    stream
+    let bytes=stream
         .read(&mut buf)
         .await
         .context("CTX: handle connection read buffer")?;
 
-    let request = HttpRequest::from_byte_array(&buf);
+    let request = HttpRequest::from_byte_array(buf[0..bytes].to_vec());
 
     let response = if request.verb == "GET" && request.path == "/" {
         HttpResponse::new("".to_string(), request.protocol, 200)
@@ -158,7 +158,7 @@ struct HttpRequest {
 }
 
 impl HttpRequest {
-    fn from_byte_array(buf: &[u8; 1024]) -> Self {
+    fn from_byte_array(buf: Vec<u8>) -> Self {
         let data = String::from_utf8_lossy(&buf[..]);
 
         let (parts, body) = data.split_once("\r\n\r\n").unwrap_or_default();
@@ -190,7 +190,7 @@ impl HttpRequest {
             .collect::<HashMap<_, _>>();
 
         dbg!("{:#?}", headers.clone());
-        let body = body.trim_end_matches('\0').to_string();
+        let body = body.to_string();
         Self {
             verb,
             path,
