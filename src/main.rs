@@ -99,6 +99,8 @@ impl HttpResponse {
             "200 OK"
         } else if status == 404 {
             "404 Not Found"
+        } else if status == 201 {
+            "201 Created"
         } else {
             panic!("HTTP status code not supported")
         }
